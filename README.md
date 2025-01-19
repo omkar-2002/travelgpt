@@ -1,79 +1,112 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# Travel GPT 🌎
 
-# Getting Started
+A React Native chat application featuring text and voice messaging with a travel assistant interface. Users can interact through text messages or voice recordings to get travel-related information.
 
->**Note**: Make sure you have completed the [React Native - Environment Setup](https://reactnative.dev/docs/environment-setup) instructions till "Creating a new application" step, before proceeding.
+## Features 🚀
 
-## Step 1: Start the Metro Server
+- Text & Voice Messaging
+- Voice Recording with Playback
+- Persistent Chat History (Redux)
+- Travel Categories
+- Custom Animations (Lottie)
+- Cross-platform (iOS & Android)
 
-First, you will need to start **Metro**, the JavaScript _bundler_ that ships _with_ React Native.
+## Getting Started
 
-To start Metro, run the following command from the _root_ of your React Native project:
+> **Note**: Make sure you have completed the [React Native - Environment Setup](https://reactnative.dev/docs/environment-setup) instructions before proceeding.
+
+### Prerequisites
+
+- Node.js >= 14
+- React Native CLI
+- Android Studio (for Android)
+- Xcode (for iOS)
+- JDK 11
+
+### Installation
 
 ```bash
-# using npm
+# Clone the repo
+git clone [repository-url]
+cd travel-gpt
+
+# Install dependencies
+npm install
+# OR
+yarn install
+
+# For iOS, install pods
+cd ios && pod install && cd ..
+
+Step 1: Start Metro Server
+First, start Metro, the JavaScript bundler that ships with React Native.
+bashCopy# using npm
 npm start
 
 # OR using Yarn
 yarn start
-```
-
-## Step 2: Start your Application
-
-Let Metro Bundler run in its _own_ terminal. Open a _new_ terminal from the _root_ of your React Native project. Run the following command to start your _Android_ or _iOS_ app:
-
-### For Android
-
-```bash
-# using npm
+Step 2: Start Application
+Let Metro Bundler run in its own terminal. Open a new terminal from the root of your project. Run the following command to start your Android or iOS app:
+For Android
+bashCopy# using npm
 npm run android
 
 # OR using Yarn
 yarn android
-```
-
-### For iOS
-
-```bash
-# using npm
+For iOS
+bashCopy# using npm
 npm run ios
 
 # OR using Yarn
 yarn ios
+Building Debug APK
+bashCopycd android
+./gradlew assembleDebug
+APK location: android/app/build/outputs/apk/debug/app-debug.apk
+Project Structure 📁
+Copytravel-gpt/
+├── src/
+│   ├── components/     # Reusable components
+│   ├── constants/      # App constants
+│   ├── store/         # Redux store
+│   ├── hooks/         # Custom hooks
+│   └── assets/        # Assets & animations
+├── android/
+└── ios/
+Dependencies 📦
+
+react-native
+react-native-audio-recorder-player
+react-native-vector-icons
+@reduxjs/toolkit
+redux-persist
+lottie-react-native
+rn-fetch-blob
+
+Required Permissions 🔒
+
+Microphone
+Storage (Android)
+
+Troubleshooting
+If you can't get this to work, try these steps:
+
+Clear watchman: watchman watch-del-all
+Delete node_modules: rm -rf node_modules && npm install
+Clear Metro cache: npm start -- --reset-cache
+Android specific: cd android && ./gradlew clean
+iOS specific: cd ios && pod deintegrate && pod install
+
+Learn More
+To learn more about React Native, check out these resources:
+
+React Native Website
+Getting Started Guide
+Learn the Basics
+
+Notes 📝
+
+Chat history persists across restarts
+Voice messages stored locally
+Admin responses are simulated [dummy messages]
 ```
-
-If everything is set up _correctly_, you should see your new app running in your _Android Emulator_ or _iOS Simulator_ shortly provided you have set up your emulator/simulator correctly.
-
-This is one way to run your app — you can also run it directly from within Android Studio and Xcode respectively.
-
-## Step 3: Modifying your App
-
-Now that you have successfully run the app, let's modify it.
-
-1. Open `App.tsx` in your text editor of choice and edit some lines.
-2. For **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Developer Menu** (<kbd>Ctrl</kbd> + <kbd>M</kbd> (on Window and Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (on macOS)) to see your changes!
-
-   For **iOS**: Hit <kbd>Cmd ⌘</kbd> + <kbd>R</kbd> in your iOS Simulator to reload the app and see your changes!
-
-## Congratulations! :tada:
-
-You've successfully run and modified your React Native App. :partying_face:
-
-### Now what?
-
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [Introduction to React Native](https://reactnative.dev/docs/getting-started).
-
-# Troubleshooting
-
-If you can't get this to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
-
-# Learn More
-
-To learn more about React Native, take a look at the following resources:
-
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
