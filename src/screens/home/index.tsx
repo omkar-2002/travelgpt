@@ -1,4 +1,4 @@
-import React, {useState, useRef, useEffect, useCallback, useMemo} from 'react';
+import React, {useState, useRef, useEffect, useMemo, useCallback} from 'react';
 import {
   View,
   TouchableOpacity,
@@ -7,13 +7,13 @@ import {
   FlatList,
   TextInput,
   KeyboardAvoidingView,
-  Animated,
+  Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import AntDesign from 'react-native-vector-icons/AntDesign';
+import Feather from 'react-native-vector-icons/Feather';
 import AudioRecorderPlayer from 'react-native-audio-recorder-player';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import {check, request, PERMISSIONS, RESULTS} from 'react-native-permissions';
+import RNFetchBlob from 'rn-fetch-blob';
 import AutoTextBox from '../../components/AutoMessageBox';
 import {useAppDispatch} from '../../hook/reduxHooks';
 import {addMessage} from '../../store/home/slice';
@@ -21,15 +21,11 @@ import {useSelector} from 'react-redux';
 import {messagesSelector} from '../../store/home/selector';
 import CustomHeader from '../../components/Header';
 import styles from './styles';
-
-interface Message {
-  id: string;
-  sender: 'user' | 'admin';
-  type: 'text' | 'audio';
-  content: string;
-  timestamp: number;
-  duration?: string;
-}
+import {colors} from '../../constants/colors';
+import LottieView from 'lottie-react-native';
+import ChatComponent from '../../components/ChatComponent';
+import {requestPermissions} from '../../hook/requestPermission';
+const recordingLottie = require('../../assets/lottie/recorder.json');
 
 const categories = [
   '🌴 Holiday',
@@ -39,6 +35,15 @@ const categories = [
   '🏨 Hotel',
 ];
 
+interface Message {
+  id: number;
+  sender: 'user' | 'admin';
+  type: 'text' | 'voice';
+  content: string;
+  timestamp: string;
+  duration: string;
+}
+
 const Home: React.FC = () => {
   const [inputText, setInputText] = useState('');
   const [activeCategory, setActiveCategory] = useState(categories[0]);
@@ -47,6 +52,10 @@ const Home: React.FC = () => {
   const [recordingTime, setRecordingTime] = useState('00:00');
   const [currentAudioPath, setCurrentAudioPath] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState<string | null>(null);
+  const [currentPlaybackTime, setCurrentPlaybackTime] = useState<{
+    [key: string]: string;
+  }>({});
+  const [recordingDuration, setRecordingDuration] = useState('00:00');
 
   const dispatch = useAppDispatch();
   const inputRef = useRef<TextInput>(null);
@@ -54,15 +63,35 @@ const Home: React.FC = () => {
   const flatListRef = useRef<FlatList>(null);
   const previousLength = useRef(messages.length);
   const audioRecorderPlayer = useRef(new AudioRecorderPlayer());
+  const recordBackListener = useRef<any>(null);
+  const playBackListener = useRef<any>(null);
+  const lottieRefs = useRef<{[key: string]: any}>({});
 
   useEffect(() => {
-    checkPermission();
+    requestPermissions();
     return () => {
-      stopRecording();
-      audioRecorderPlayer.current.removeRecordBackListener();
-      audioRecorderPlayer.current.removePlayBackListener();
+      cleanup();
     };
   }, []);
+
+  const cleanup = async () => {
+    try {
+      if (isRecording) {
+        await stopRecording();
+      }
+      if (isPlaying) {
+        await audioRecorderPlayer.current.stopPlayer();
+      }
+      if (recordBackListener.current) {
+        audioRecorderPlayer.current.removeRecordBackListener();
+      }
+      if (playBackListener.current) {
+        audioRecorderPlayer.current.removePlayBackListener();
+      }
+    } catch (error) {
+      console.error('Cleanup error:', error);
+    }
+  };
 
   useEffect(() => {
     if (flatListRef.current && messages.length > previousLength.current) {
@@ -74,71 +103,114 @@ const Home: React.FC = () => {
     previousLength.current = messages.length;
   }, [messages]);
 
-  const checkPermission = async () => {
-    const permission =
-      Platform.OS === 'ios'
-        ? PERMISSIONS.IOS.MICROPHONE
-        : PERMISSIONS.ANDROID.RECORD_AUDIO;
-
-    const result = await check(permission);
-    if (result !== RESULTS.GRANTED) {
-      const permissionResult = await request(permission);
-      return permissionResult === RESULTS.GRANTED;
+  const getAudioFilePath = () => {
+    const fileName = `audio_${Date.now()}.m4a`;
+    if (Platform.OS === 'android') {
+      return `${RNFetchBlob.fs.dirs.CacheDir}/${fileName}`;
     }
-    return true;
+    return fileName;
   };
 
   const startRecording = async () => {
-    const hasPermission = await checkPermission();
-    if (!hasPermission) return;
+    try {
+      const hasPermission = await requestPermissions();
+      if (!hasPermission) {
+        return;
+      }
 
-    setShowRecordingControls(true);
-    setIsRecording(true);
+      setShowRecordingControls(true);
+      setIsRecording(true);
+      setRecordingTime('00:00');
 
-    const fileName = `audio_${Date.now()}.m4a`;
-    const path = Platform.OS === 'ios' ? `${fileName}` : `sdcard/${fileName}`;
+      const audioPath = getAudioFilePath();
 
-    await audioRecorderPlayer.current.startRecorder(path);
+      await audioRecorderPlayer.current.startRecorder(audioPath);
+      setCurrentAudioPath(audioPath);
 
-    audioRecorderPlayer.current.addRecordBackListener(e => {
-      const time = audioRecorderPlayer.current.mmssss(
-        Math.floor(e.currentPosition),
-      );
-      setRecordingTime(time.slice(0, 5));
-    });
-
-    setCurrentAudioPath(path);
+      recordBackListener.current =
+        audioRecorderPlayer.current.addRecordBackListener(e => {
+          const seconds = Math.floor(e.currentPosition / 1000);
+          const minutes = Math.floor(seconds / 60);
+          const remainingSeconds = seconds % 60;
+          const timeString = `${minutes
+            .toString()
+            .padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+          setRecordingTime(timeString);
+          setRecordingDuration(timeString); // Store the duration as it updates
+        });
+    } catch (error) {
+      console.error('Start recording error:', error);
+      setShowRecordingControls(false);
+      setIsRecording(false);
+      Alert.alert('Error', 'Failed to start recording. Please try again.');
+    }
   };
 
   const stopRecording = async () => {
     if (!isRecording) return;
 
-    const result = await audioRecorderPlayer.current.stopRecorder();
-    audioRecorderPlayer.current.removeRecordBackListener();
+    try {
+      const result = await audioRecorderPlayer.current.stopRecorder();
+      console.log('Recording stopped:', result);
 
-    setShowRecordingControls(false);
-    setIsRecording(false);
+      if (recordBackListener.current) {
+        audioRecorderPlayer.current.removeRecordBackListener();
+        recordBackListener.current = null;
+      }
 
-    if (currentAudioPath) {
-      // Save audio path to AsyncStorage
-      const audioMessages =
-        (await AsyncStorage.getItem('audioMessages')) || '[]';
-      const messages = JSON.parse(audioMessages);
-      messages.push(currentAudioPath);
-      await AsyncStorage.setItem('audioMessages', JSON.stringify(messages));
+      setShowRecordingControls(false);
+      setIsRecording(false);
 
-      // Dispatch audio message
-      dispatch(
-        addMessage({
-          sender: 'user',
-          type: 'audio',
-          content: currentAudioPath,
-          duration: recordingTime,
-        }),
-      );
+      if (currentAudioPath) {
+        dispatch(
+          addMessage({
+            sender: 'user',
+            type: 'voice',
+            content: currentAudioPath,
+            duration: recordingDuration, // Add the final duration
+          }),
+        );
+      }
+
+      setRecordingTime('00:00');
+      setRecordingDuration('00:00');
+      setCurrentAudioPath(null);
+    } catch (error) {
+      console.error('Stop recording error:', error);
+      Alert.alert('Error', 'Failed to stop recording. Please try again.');
     }
+  };
 
-    setRecordingTime('00:00');
+  const deleteRecording = async () => {
+    try {
+      // Stop recording first if it's ongoing
+      if (isRecording) {
+        await audioRecorderPlayer.current.stopRecorder();
+        if (recordBackListener.current) {
+          audioRecorderPlayer.current.removeRecordBackListener();
+          recordBackListener.current = null;
+        }
+      }
+
+      // Delete the file if it exists
+      if (currentAudioPath) {
+        try {
+          await RNFetchBlob.fs.unlink(currentAudioPath);
+        } catch (error) {
+          console.log('File deletion error:', error);
+        }
+      }
+
+      // Reset all recording states
+      setShowRecordingControls(false);
+      setIsRecording(false);
+      setRecordingTime('00:00');
+      setRecordingDuration('00:00');
+      setCurrentAudioPath(null);
+    } catch (error) {
+      console.error('Delete recording error:', error);
+      Alert.alert('Error', 'Failed to delete recording. Please try again.');
+    }
   };
 
   const playAudio = async (audioPath: string) => {
@@ -146,26 +218,60 @@ const Home: React.FC = () => {
       if (isPlaying === audioPath) {
         await audioRecorderPlayer.current.stopPlayer();
         setIsPlaying(null);
+        if (lottieRefs.current[audioPath]) {
+          lottieRefs.current[audioPath].pause();
+        }
         return;
       }
 
       if (isPlaying) {
         await audioRecorderPlayer.current.stopPlayer();
+        if (lottieRefs.current[isPlaying]) {
+          lottieRefs.current[isPlaying].pause();
+        }
       }
 
       await audioRecorderPlayer.current.startPlayer(audioPath);
       setIsPlaying(audioPath);
 
-      audioRecorderPlayer.current.addPlayBackListener(e => {
-        if (e.currentPosition === e.duration) {
-          audioRecorderPlayer.current.stopPlayer();
-          audioRecorderPlayer.current.removePlayBackListener();
-          setIsPlaying(null);
-        }
-      });
+      if (lottieRefs.current[audioPath]) {
+        lottieRefs.current[audioPath].play();
+      }
+
+      if (playBackListener.current) {
+        audioRecorderPlayer.current.removePlayBackListener();
+      }
+
+      playBackListener.current =
+        audioRecorderPlayer.current.addPlayBackListener(e => {
+          const seconds = Math.floor(e.currentPosition / 1000);
+          const minutes = Math.floor(seconds / 60);
+          const remainingSeconds = seconds % 60;
+          const timeString = `${minutes
+            .toString()
+            .padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+
+          setCurrentPlaybackTime(prev => ({
+            ...prev,
+            [audioPath]: timeString,
+          }));
+
+          if (e.currentPosition === e.duration) {
+            audioRecorderPlayer.current.stopPlayer();
+            if (playBackListener.current) {
+              audioRecorderPlayer.current.removePlayBackListener();
+              playBackListener.current = null;
+            }
+            setIsPlaying(null);
+            if (lottieRefs.current[audioPath]) {
+              lottieRefs.current[audioPath].pause();
+            }
+          }
+        });
     } catch (error) {
       console.error('Error playing audio:', error);
       setIsPlaying(null);
+      Alert.alert('Error', 'Failed to play audio. Please try again.');
     }
   };
 
@@ -182,50 +288,26 @@ const Home: React.FC = () => {
     setInputText('');
   };
 
-  const renderMessage = ({item}: {item: Message}) => (
-    <View
-      style={[
-        styles.messageContainer,
-        item.sender === 'user'
-          ? styles.userMessageContainer
-          : styles.adminMessageContainer,
-      ]}>
-      {item.type === 'text' ? (
-        <View
-          style={[
-            styles.textMessage,
-            item.sender === 'user' ? styles.userBubble : styles.adminBubble,
-          ]}>
-          <Text
-            style={[
-              styles.messageText,
-              {color: item.sender === 'user' ? 'white' : 'black'},
-            ]}>
-            {item.content}
-          </Text>
-        </View>
-      ) : (
-        <TouchableOpacity
-          style={styles.audioMessage}
-          onPress={() => playAudio(item.content)}>
-          <Icon
-            name={isPlaying === item.content ? 'stop' : 'play-arrow'}
-            size={24}
-            color="#FFF"
-          />
-          <View style={styles.audioWaveform} />
-          {item.duration && (
-            <Text style={styles.audioDuration}>{item.duration}</Text>
-          )}
-        </TouchableOpacity>
-      )}
-    </View>
+  const renderMessage = useCallback(
+    ({item}: {item: Message}) => {
+      return (
+        <ChatComponent
+          item={item}
+          isPlaying={isPlaying}
+          currentPlaybackTime={currentPlaybackTime}
+          onPlayAudio={playAudio}
+          lottieRefs={lottieRefs}
+          recordingLottie={recordingLottie}
+        />
+      );
+    },
+    [isPlaying, currentPlaybackTime],
   );
 
   const emptyComponent = useMemo(() => {
     return (
       <View style={styles.emptyContainer}>
-        <Text style={{textAlign: 'center'}}>
+        <Text style={{textAlign: 'center', color: colors.black}}>
           Hi There! 👋 My name is Tratoli. How can I assist you today?
         </Text>
         <View style={styles.categoryContainer}>
@@ -252,7 +334,7 @@ const Home: React.FC = () => {
         data={messages}
         ref={flatListRef}
         renderItem={renderMessage}
-        keyExtractor={item => item.id}
+        keyExtractor={item => item.id.toString()}
         contentContainerStyle={{paddingBottom: 20}}
         ListEmptyComponent={emptyComponent}
         getItemLayout={(_, index) => ({
@@ -284,31 +366,52 @@ const Home: React.FC = () => {
               multiline
             />
           ) : (
-            <View style={styles.recordingContainer}>
-              <Animated.View style={styles.recordingIndicator} />
-              <Text style={styles.recordingTime}>{recordingTime}</Text>
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                flex: 1,
+                marginVertical: 4,
+              }}>
+              <TouchableOpacity onPress={deleteRecording}>
+                <Feather name="trash" size={22} color={'#00000080'} />
+              </TouchableOpacity>
+              <View
+                style={[
+                  styles.recordingContainer,
+                  {
+                    backgroundColor: `${colors.primary}40`,
+                    paddingVertical: 6,
+                    borderRadius: 12,
+                    marginHorizontal: 16,
+                    marginRight: 12,
+                  },
+                ]}>
+                {/* <Animated.View style={styles.recordingIndicator} /> */}
+
+                <LottieView
+                  autoPlay
+                  source={recordingLottie}
+                  style={{width: '80%', height: 30}}
+                />
+                <Text style={styles.recordingTime}>{recordingTime}</Text>
+              </View>
             </View>
           )}
 
-          {!showRecordingControls ? (
-            <>
+          <>
+            {!showRecordingControls && (
               <TouchableOpacity onPress={startRecording}>
                 <Icon name="mic" size={24} color="#666" />
               </TouchableOpacity>
+            )}
 
-              <TouchableOpacity
-                style={styles.sendButton}
-                onPress={sendTextMessage}>
-                <AntDesign name="arrowup" size={20} color="#FFFFFF" />
-              </TouchableOpacity>
-            </>
-          ) : (
             <TouchableOpacity
-              style={[styles.micButton, styles.stopRecording]}
-              onPress={stopRecording}>
-              <Icon name="stop" size={24} color="#FFF" />
+              style={styles.sendButton}
+              onPress={showRecordingControls ? stopRecording : sendTextMessage}>
+              <AntDesign name="arrowup" size={20} color="#FFFFFF" />
             </TouchableOpacity>
-          )}
+          </>
         </View>
       </View>
     </KeyboardAvoidingView>

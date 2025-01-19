@@ -28,7 +28,7 @@ const RootNavigation = () => {
             name="Home"
             component={Home}
             options={{
-              title: 'Audio Recorder',
+              title: 'Home',
               headerShown: false,
             }}
           />

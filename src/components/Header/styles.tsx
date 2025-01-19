@@ -1,4 +1,5 @@
 import {StyleSheet, Dimensions} from 'react-native';
+import {colors} from '../../constants/colors';
 
 const {width} = Dimensions.get('window');
 
@@ -20,7 +21,8 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     textAlign: 'center',
-    flex: 1, // Ensures the title is centered between the icons
+    flex: 1, // Ensures the title is centered between the icons,
+    color: colors.black,
   },
 });
 
